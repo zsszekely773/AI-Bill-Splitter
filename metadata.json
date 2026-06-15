@@ -1,0 +1,6 @@
+{
+  "name": "Bill Splitter",
+  "description": "A modern, mobile-friendly bill splitter application that analyzes receipt photos via Gemini to dynamically allocate items and calculate shared costs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
