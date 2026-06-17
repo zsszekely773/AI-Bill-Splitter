@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Member, Item, BillDetails } from "../types";
-import { DollarSign, Copy, Check, ArrowLeft, RefreshCw, Smartphone, TrendingUp, Sparkles, Receipt } from "lucide-react";
+import { DollarSign, Copy, Check, ArrowLeft, RefreshCw, Smartphone, TrendingUp, Sparkles, Receipt, FileDown, Loader2 } from "lucide-react";
 import { formatAmount } from "../utils";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 interface SplitSummaryProps {
   members: Member[];
@@ -21,6 +23,7 @@ export default function SplitSummary({
   onBackToAssign,
 }: SplitSummaryProps) {
   const [copied, setCopied] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Let's get the target decimals for rounding based on the currency
   const decimals = (billDetails.currency === "HUF" || billDetails.currency === "JPY") ? 0 : 2;
@@ -208,9 +211,224 @@ export default function SplitSummary({
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const pdf = new jsPDF("p", "pt", "a4");
+      let y = 50;
+      const margin = 40;
+      const pageWidth = 595;
+      const contentWidth = pageWidth - margin * 2; // 515
+
+      const drawPageHeader = () => {
+        pdf.setFont("Helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.setTextColor(150, 150, 150);
+        pdf.text("SPLIT INVOICE — POWERED BY DINER NOIR BILL SPLITTER", margin, 35);
+        pdf.setDrawColor(240, 240, 240);
+        pdf.setLineWidth(1);
+        pdf.line(margin, 40, margin + contentWidth, 40);
+      };
+
+      const checkPageBreak = (heightNeeded: number) => {
+        if (y + heightNeeded > 800) {
+          pdf.addPage();
+          y = 50;
+          drawPageHeader();
+        }
+      };
+
+      // Initial header
+      drawPageHeader();
+      y = 65;
+
+      // Title Banner
+      pdf.setFont("Helvetica", "bold");
+      pdf.setFontSize(20);
+      pdf.setTextColor(24, 24, 27); // zinc-900 / black
+      const titleText = (billDetails.title || "SPLIT INVOICE").toUpperCase();
+      pdf.text(titleText, margin, y);
+      y += 22;
+
+      // Meta subheaders
+      pdf.setFont("Helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.setTextColor(113, 113, 122); // zinc-500
+      const dateStr = new Date().toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
+      pdf.text(`Date & Time: ${dateStr}`, margin, y);
+      
+      const currencyStr = billDetails.currency;
+      pdf.text(`Currency: ${currencyStr} | Mode: ${billDetails.splitTaxTipMode === "proportional" ? "Proportional Split" : "Equal Split"}`, margin + 250, y);
+      y += 15;
+
+      // Divider line
+      pdf.setDrawColor(39, 39, 42); // zinc-800
+      pdf.setLineWidth(1.5);
+      pdf.line(margin, y, margin + contentWidth, y);
+      y += 20;
+
+      // Draw Bill Details Overview Box
+      checkPageBreak(120);
+      pdf.setFillColor(248, 250, 252); // soft cool grey/blue background
+      pdf.rect(margin, y, contentWidth, 80, "F");
+      
+      pdf.setFont("Helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 116, 139); // slate-500
+      pdf.text("RECEIPT FEES & TOTALS", margin + 15, y + 20);
+
+      pdf.setFont("Helvetica", "normal");
+      pdf.setFontSize(10);
+      pdf.setTextColor(51, 65, 85); // slate-700
+      pdf.text(`Items Subtotal: ${formatAmount(itemsSubtotal, currencyStr)}`, margin + 15, y + 40);
+      pdf.text(`Taxes Amount: ${formatAmount(billDetails.tax, currencyStr)}`, margin + 15, y + 55);
+
+      pdf.text(`Tips Amount: ${formatAmount(resolvedTipValue, currencyStr)}`, margin + 190, y + 40);
+      pdf.text(`Extra Service Fees: ${formatAmount(billDetails.serviceCharge, currencyStr)}`, margin + 190, y + 55);
+
+      // Grand Total on the Right
+      pdf.setFont("Helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.setTextColor(15, 23, 42); // slate-900
+      pdf.text("GRAND TOTAL DUE", margin + 370, y + 30);
+      pdf.setFontSize(15);
+      pdf.setTextColor(24, 24, 27); // black
+      pdf.text(formatAmount(grandTotal, currencyStr), margin + 370, y + 50);
+
+      y += 105;
+
+      // Header for Individual Splits
+      checkPageBreak(40);
+      pdf.setFont("Helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.setTextColor(24, 24, 27);
+      pdf.text("INDIVIDUAL SETTLEMENT OUTCOMES", margin, y);
+      y += 8;
+      pdf.setDrawColor(228, 228, 231); // zinc-200
+      pdf.setLineWidth(1);
+      pdf.line(margin, y, margin + contentWidth, y);
+      y += 18;
+
+      // Render details for each member split card
+      memberTotalSplits.forEach((split) => {
+        const itemRowsCount = split.itemizedShares.length;
+        const extraRows = (split.unassignedShare > 0 ? 1 : 0) + 1; // plus tax & fees share
+        const rowHeight = 15;
+        const totalEstimatedHeight = 25 + (itemRowsCount + extraRows) * rowHeight + 25 + 10;
+
+        checkPageBreak(totalEstimatedHeight);
+
+        // Render card background
+        pdf.setFillColor(250, 250, 250); // very soft ivory gray
+        pdf.rect(margin, y, contentWidth, totalEstimatedHeight - 10, "F");
+        pdf.setDrawColor(240, 240, 241);
+        pdf.rect(margin, y, contentWidth, totalEstimatedHeight - 10, "S");
+
+        // Card Header - User Name and Total
+        pdf.setFont("Helvetica", "bold");
+        pdf.setFontSize(11);
+        pdf.setTextColor(24, 24, 27);
+        pdf.text(split.member.name, margin + 12, y + 18);
+
+        const totalValStr = `${formatAmount(split.totalAllocated, currencyStr)}`;
+        const totalValWidth = pdf.getTextWidth(totalValStr);
+        pdf.text(totalValStr, margin + contentWidth - 12 - totalValWidth, y + 18);
+
+        // Header underline divider
+        pdf.setDrawColor(235, 235, 235);
+        pdf.line(margin + 12, y + 24, margin + contentWidth - 12, y + 24);
+
+        let rowY = y + 38;
+
+        // Courier monospaced font for receipt listing aesthetic!
+        pdf.setFont("Courier", "normal");
+        pdf.setFontSize(9.5);
+        pdf.setTextColor(63, 63, 70); // zinc-700
+
+        // Render each itemized row
+        split.itemizedShares.forEach((itm) => {
+          const qtyText = itm.quantity > 1 ? `${itm.quantity}x ` : "";
+          const splitText = itm.splitCount > 1 ? ` (${itm.splitCount}-way split)` : "";
+          const desc = `${qtyText}${itm.name}${splitText}`;
+          const amtStr = formatAmount(itm.amount, currencyStr);
+
+          pdf.text(desc, margin + 15, rowY);
+          
+          const amtWidth = pdf.getTextWidth(amtStr);
+          pdf.text(amtStr, margin + contentWidth - 15 - amtWidth, rowY);
+          rowY += rowHeight;
+        });
+
+        // Unassigned share if any
+        if (split.unassignedShare > 0) {
+          const desc = "Shared Unassigned Items";
+          const amtStr = formatAmount(split.unassignedShare, currencyStr);
+          pdf.text(desc, margin + 15, rowY);
+
+          const amtWidth = pdf.getTextWidth(amtStr);
+          pdf.text(amtStr, margin + contentWidth - 15 - amtWidth, rowY);
+          rowY += rowHeight;
+        }
+
+        // Taxes & Fees share
+        {
+          const desc = "Proportional Taxes & Fees Share";
+          const amtStr = formatAmount(split.feeShare, currencyStr);
+          pdf.text(desc, margin + 15, rowY);
+
+          const amtWidth = pdf.getTextWidth(amtStr);
+          pdf.text(amtStr, margin + contentWidth - 15 - amtWidth, rowY);
+          rowY += rowHeight;
+        }
+
+        // payment handles
+        if (split.member.paymentHandle) {
+          pdf.setFont("Helvetica", "bold");
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(113, 113, 122); // zinc-500
+          pdf.text(`Settle up via PayPal/Venmo URL/Username: @${split.member.paymentHandle}`, margin + 15, rowY + 3);
+        }
+
+        y += totalEstimatedHeight;
+      });
+
+      // Simple footer
+      checkPageBreak(50);
+      y += 10;
+      pdf.setDrawColor(228, 228, 231);
+      pdf.setLineWidth(1);
+      pdf.line(margin, y, margin + contentWidth, y);
+      y += 18;
+
+      pdf.setFont("Helvetica", "italic");
+      pdf.setFontSize(8.5);
+      pdf.setTextColor(161, 161, 170); // zinc-400
+      const footerText = "Thank you for using AI Studio Diner Noir Bill Splitter. Accurate dining splits powered by Gemini.";
+      const footerWidth = pdf.getTextWidth(footerText);
+      pdf.text(footerText, margin + (contentWidth - footerWidth) / 2, y);
+
+      // Save file
+      const cleanTitle = (billDetails.title || "Bill_Split").replace(/[^a-zA-Z0-9_\-]/g, "_");
+      pdf.save(`${cleanTitle}_invoice.pdf`);
+    } catch (error) {
+      console.error("PDF Export failed:", error);
+      alert("An error occurred during print export.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8" id="summary-panel-container">
-      {/* Upper header similar to the Diner Noir layout */}
+      <div id="pdf-report-content" className="space-y-8 bg-zinc-950 p-6 border border-zinc-900 rounded-none">
+        {/* Upper header similar to the Diner Noir layout */}
       <header className="flex flex-col md:flex-row md:items-baseline justify-between border-b border-zinc-800 pb-5 gap-4">
         <div className="flex flex-col">
           <span className="text-[10px] tracking-[0.3em] uppercase text-zinc-500 font-bold mb-1">CURRENT OUTCOMES</span>
@@ -380,6 +598,7 @@ export default function SplitSummary({
           <p className="text-xl font-black text-[#C0FF00] font-mono mt-0.5">{formatAmount(grandTotal, billDetails.currency)}</p>
         </div>
       </div>
+      </div>
 
       {/* Action triggers */}
       <div className="flex flex-col md:flex-row justify-between gap-3 pt-6 border-t border-zinc-850">
@@ -405,6 +624,24 @@ export default function SplitSummary({
               <>
                 <Copy className="h-4 w-4 text-zinc-500" />
                 Copy Split Summary Report
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleExportPDF}
+            disabled={isExporting}
+            className="text-xs font-black uppercase tracking-[0.2em] px-5 py-4 bg-zinc-900 border border-zinc-800 text-white hover:border-[#C0FF00] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            {isExporting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-[#C0FF00]" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <FileDown className="h-4 w-4 text-zinc-500" />
+                Export PDF Invoice
               </>
             )}
           </button>

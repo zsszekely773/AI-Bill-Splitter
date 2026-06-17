@@ -30,7 +30,6 @@ interface MemberRosterProps {
 
 export default function MemberRoster({ members, onAddMember, onRemoveMember, onClearValues }: MemberRosterProps) {
   const [name, setName] = useState("");
-  const [paymentHandle, setPaymentHandle] = useState("");
   const [selectedEmoji, setSelectedEmoji] = useState(EMOJIS[0]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -44,12 +43,10 @@ export default function MemberRoster({ members, onAddMember, onRemoveMember, onC
       name: name.trim(),
       color: randomColor,
       avatarEmoji: selectedEmoji,
-      paymentHandle: paymentHandle.trim() || undefined,
     };
 
     onAddMember(newMember);
     setName("");
-    setPaymentHandle("");
     // Cycle to a new random emoji for variety
     setSelectedEmoji(EMOJIS[Math.floor(Math.random() * EMOJIS.length)]);
   };
@@ -158,7 +155,7 @@ export default function MemberRoster({ members, onAddMember, onRemoveMember, onC
       <form onSubmit={handleSubmit} className="p-4 rounded-none bg-zinc-950 border border-zinc-900 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           {/* Name input */}
-          <div className="md:col-span-5">
+          <div className="md:col-span-8">
             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
               Member Name
             </label>
@@ -172,25 +169,8 @@ export default function MemberRoster({ members, onAddMember, onRemoveMember, onC
             />
           </div>
 
-          {/* Venmo/PayPal payment tag */}
-          <div className="md:col-span-4">
-            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
-              Venmo Handle (Optional)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-2 text-zinc-500 font-sans text-xs">@</span>
-              <input
-                type="text"
-                placeholder="venmo_username"
-                value={paymentHandle}
-                onChange={(e) => setPaymentHandle(e.target.value.replace(/[@ ]/g, ""))}
-                className="w-full bg-zinc-900 border border-zinc-805 rounded-none pl-6 pr-3 py-2 text-xs text-white focus:outline-none focus:border-[#C0FF00] placeholder:text-zinc-700 font-mono"
-              />
-            </div>
-          </div>
-
           {/* Emoji Avatar choices */}
-          <div className="md:col-span-3">
+          <div className="md:col-span-4">
             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
               Avatar Icon
             </label>

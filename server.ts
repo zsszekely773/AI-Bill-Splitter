@@ -34,6 +34,36 @@ function getAiClient() {
   return aiClient;
 }
 
+// Wrapper to try multiple fallback models with retries for resilience against 503 errors
+async function generateContentWithFallback(
+  ai: GoogleGenAI,
+  modelsToTry: string[],
+  params: any
+) {
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.log(`[Google SDK] Attempting receipt parse with model ${model} (attempt ${attempt}/2)`);
+        const response = await ai.models.generateContent({
+          ...params,
+          model: model,
+        });
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[Google SDK Warning] Model ${model} failed on attempt ${attempt}:`, err.message || err);
+        // Wait a brief moment before retrying or fallback
+        const delay = attempt * 1200;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error("All model fallback attempts exhausted.");
+}
+
 // REST Endpoint to parse a receipt photo
 app.post("/api/analyze-receipt", async (req, res): Promise<any> => {
   try {
@@ -56,36 +86,39 @@ app.post("/api/analyze-receipt", async (req, res): Promise<any> => {
       text: "Analyze this receipt image and extract the items, the individual unit price of each item (this means the price of a single unit of that item, NOT the multiplied row subtotal if quantity is > 1), quantity, tax, tip, service charge, and total. If you see multiple discounts or adjustments, deduct them from the item price, or list them as separate items with negative prices. Ensure every item name is descriptive and exact.",
     };
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: { parts: [imagePart, textPart] },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            items: {
-              type: Type.ARRAY,
-              description: "The list of standard items purchased on the receipt.",
+    const response = await generateContentWithFallback(
+      ai,
+      ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"],
+      {
+        contents: { parts: [imagePart, textPart] },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
               items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING, description: "Descriptive name of the food or item." },
-                  price: { type: Type.NUMBER, description: "The individual unit price of a single unit of this item (not the total price for the row/quantity)." },
-                  quantity: { type: Type.INTEGER, description: "Quantity of this item." },
+                type: Type.ARRAY,
+                description: "The list of standard items purchased on the receipt.",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING, description: "Descriptive name of the food or item." },
+                    price: { type: Type.NUMBER, description: "The individual unit price of a single unit of this item (not the total price for the row/quantity)." },
+                    quantity: { type: Type.INTEGER, description: "Quantity of this item." },
+                  },
+                  required: ["name", "price"],
                 },
-                required: ["name", "price"],
               },
+              tax: { type: Type.NUMBER, description: "Sales tax amount if found, otherwise 0." },
+              tip: { type: Type.NUMBER, description: "Tip/gratuity amount if found, otherwise 0." },
+              serviceCharge: { type: Type.NUMBER, description: "Service charge or other fees if found, otherwise 0." },
+              total: { type: Type.NUMBER, description: "The Grand Total of the receipt if found." },
             },
-            tax: { type: Type.NUMBER, description: "Sales tax amount if found, otherwise 0." },
-            tip: { type: Type.NUMBER, description: "Tip/gratuity amount if found, otherwise 0." },
-            serviceCharge: { type: Type.NUMBER, description: "Service charge or other fees if found, otherwise 0." },
-            total: { type: Type.NUMBER, description: "The Grand Total of the receipt if found." },
+            required: ["items"],
           },
-          required: ["items"],
         },
-      },
-    });
+      }
+    );
 
     const textResult = response.text;
     if (!textResult) {

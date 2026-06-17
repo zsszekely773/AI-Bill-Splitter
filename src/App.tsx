@@ -168,7 +168,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-black text-white font-sans selection:bg-[#C0FF00] selection:text-black">
       {/* Outer core wrapper */}
-      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 pb-24 sm:px-6 lg:px-8">
         
         {/* Artistic Flair display header banner */}
         <header className="flex flex-col md:flex-row justify-between items-baseline mb-8 border-b border-zinc-800 pb-5 gap-4">
@@ -215,50 +215,6 @@ export default function App() {
             </div>
           </div>
         </header>
-
-        {/* Wizard Progression steps map (Static Tab Bar) */}
-        <div className="border-b border-zinc-800 mb-8 flex flex-nowrap overflow-x-auto select-none scrollbar-none scroll-smooth">
-          {[
-            { key: "ROSTER", label: "Group Roster", icon: User },
-            { key: "CAPTURE", label: "Receipt Scan", icon: FileText },
-            { key: "ITEMS", label: "Verify Food", icon: ClipboardList },
-            { key: "ASSIGN", label: "Assign Shares", icon: UserCheck },
-            { key: "SUMMARY", label: "Final Damage", icon: Receipt },
-          ].map((item, index) => {
-            const isActive = step === item.key;
-            const isSelectable = 
-              item.key === "ROSTER" ||
-              (item.key === "CAPTURE" && members.length > 0) ||
-              (item.key === "ITEMS" && items.length > 0) ||
-              (item.key === "ASSIGN" && items.length > 0 && members.length > 0) ||
-              (item.key === "SUMMARY" && items.length > 0 && members.length > 0);
-
-            return (
-              <button
-                key={item.key}
-                disabled={!isSelectable}
-                onClick={() => setStep(item.key as SplittingStep)}
-                className={`flex-1 min-w-[125px] pb-3 text-center border-b-2 transition-all duration-200 outline-none ${
-                  isActive
-                    ? "border-[#C0FF00] text-white font-extrabold"
-                    : isSelectable
-                    ? "border-transparent text-zinc-400 hover:text-white cursor-pointer"
-                    : "border-transparent text-zinc-700 cursor-not-allowed"
-                }`}
-              >
-                <div className="text-[9px] font-mono tracking-widest text-zinc-500 uppercase mb-1">
-                  0{index + 1}
-                </div>
-                <div className="flex items-center justify-center gap-1.5 px-2">
-                  <item.icon className={`h-3.5 w-3.5 ${isActive ? "text-[#C0FF00]" : "text-zinc-500"}`} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                    {item.label}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
 
         {/* Dynamic State views mapping switcher */}
         <main className="min-h-[400px] bg-zinc-950 p-6 md:p-8 border border-zinc-900">
@@ -350,11 +306,59 @@ export default function App() {
             <span className="px-2 py-1 border border-zinc-900 text-[9px] font-bold text-zinc-500 uppercase font-mono">
               AI Ready
             </span>
-            <span className="px-2 py-1 border border-zinc-900 text-[9px] font-bold text-zinc-500 uppercase font-mono">
-              Offline First
-            </span>
           </div>
         </footer>
+
+        {/* Stable semi-translucent bottom bar with just icons */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/75 backdrop-blur-md border-t border-zinc-900 py-3.5 px-4 flex justify-center shadow-2xl">
+          <div className="flex items-center justify-around max-w-sm w-full gap-4">
+            {[
+              { key: "ROSTER", label: "Group Roster", icon: User },
+              { key: "CAPTURE", label: "Receipt Scan", icon: FileText },
+              { key: "ITEMS", label: "Verify Food", icon: ClipboardList },
+              { key: "ASSIGN", label: "Assign Shares", icon: UserCheck },
+              { key: "SUMMARY", label: "Final Damage", icon: Receipt },
+            ].map((item, index) => {
+              const isActive = step === item.key;
+              const isSelectable = 
+                item.key === "ROSTER" ||
+                (item.key === "CAPTURE" && members.length > 0) ||
+                (item.key === "ITEMS" && items.length > 0) ||
+                (item.key === "ASSIGN" && items.length > 0 && members.length > 0) ||
+                (item.key === "SUMMARY" && items.length > 0 && members.length > 0);
+
+              const IconComponent = item.icon;
+
+              return (
+                <button
+                  key={item.key}
+                  disabled={!isSelectable}
+                  onClick={() => setStep(item.key as SplittingStep)}
+                  className={`relative p-2.5 rounded-none transition-all duration-200 group flex flex-col items-center justify-center ${
+                    isActive
+                      ? "text-[#C0FF00] scale-110 opacity-100"
+                      : isSelectable
+                      ? "text-zinc-500 hover:text-white cursor-pointer opacity-80 hover:opacity-100"
+                      : "text-zinc-800 cursor-not-allowed opacity-30"
+                  }`}
+                  title={item.label}
+                >
+                  <IconComponent className={`h-5 w-5 ${isActive ? "drop-shadow-[0_0_8px_rgba(192,255,0,0.5)]" : ""}`} />
+                  
+                  {/* Miniature indicator dash below active icon */}
+                  {isActive && (
+                    <span className="absolute bottom-0.5 w-4 h-0.5 bg-[#C0FF00] rounded-full" />
+                  )}
+
+                  {/* Soft floating pure CSS Tooltip on Hover */}
+                  <span className="absolute bottom-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950 border border-zinc-850 text-[9px] uppercase font-mono tracking-widest text-[#C0FF00] font-bold px-2.5 py-1 pointer-events-none shadow-xl rounded-none whitespace-nowrap z-50">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Custom Confirmation Modal */}
         {confirmState.show && (
